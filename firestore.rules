@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['admin', 'teacher', 'student'];
+    }
+    
+    function isValidQuiz(data) {
+      return hasRequiredFields(['title', 'questions', 'teacherId', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.questions is list && data.questions.size() <= 100 &&
+             data.teacherId is string &&
+             data.createdAt is timestamp;
+    }
+    
+    function isValidSession(data) {
+      return hasRequiredFields(['pin', 'quizId', 'teacherId', 'status', 'createdAt']) &&
+             data.pin is string && data.pin.size() == 6 &&
+             data.quizId is string &&
+             data.teacherId is string &&
+             data.status in ['waiting', 'active', 'finished'] &&
+             data.createdAt is timestamp &&
+             (!('startTime' in data) || data.startTime == null || data.startTime is timestamp) &&
+             (!('endTime' in data) || data.endTime == null || data.endTime is timestamp);
+    }
+    
+    function isValidScore(data) {
+      return hasRequiredFields(['sessionId', 'playerName', 'score', 'timestamp']) &&
+             data.sessionId is string &&
+             data.playerName is string && data.playerName.size() > 0 && data.playerName.size() < 50 &&
+             data.score is number && data.score >= 0 &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidClass(data) {
+      return hasRequiredFields(['name', 'students', 'teacherId', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.students is list && data.students.size() <= 200 &&
+             data.teacherId is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isAdmin() {
+      return isVerified() && 
+        (request.auth.token.email == 'huuchauntt@gmail.com' || 
+         request.auth.token.email == 'nttkiemtra@gmail.com');
+    }
+
+    function isVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /allowed_teachers/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /classes/{classId} {
+      // Anyone can read a class if they have the ID (needed for students to join)
+      allow read: if true;
+      allow create: if isVerified() && isValidClass(request.resource.data) && request.resource.data.teacherId == request.auth.uid;
+      allow update: if isVerified() && isValidClass(request.resource.data) && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == request.auth.uid;
+      allow delete: if isVerified() && resource.data.teacherId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.uid == userId;
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.uid == userId && request.resource.data.role == resource.data.role;
+    }
+    
+    match /quizzes/{quizId} {
+      allow read: if isAuthenticated() && resource.data.teacherId == request.auth.uid;
+      allow create: if isVerified() && isValidQuiz(request.resource.data) && request.resource.data.teacherId == request.auth.uid;
+      allow update: if isVerified() && isValidQuiz(request.resource.data) && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == request.auth.uid;
+      allow delete: if isVerified() && resource.data.teacherId == request.auth.uid;
+    }
+    
+    match /sessions/{sessionId} {
+      // Anyone can read a session to join by PIN
+      allow read: if true;
+      allow create: if isVerified() && isValidSession(request.resource.data) && request.resource.data.teacherId == request.auth.uid;
+      allow update: if isVerified() && isValidSession(request.resource.data) && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == request.auth.uid;
+      allow delete: if isVerified() && resource.data.teacherId == request.auth.uid;
+      
+      match /scores/{scoreId} {
+        // Anyone can read scores for a session (for leaderboard)
+        allow read: if true;
+        // Anyone can create a score
+        allow create: if isValidScore(request.resource.data) && request.resource.data.sessionId == sessionId;
+        allow update: if false; // Scores cannot be updated
+        allow delete: if isAuthenticated() && get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid;
+      }
+    }
+  }
+}

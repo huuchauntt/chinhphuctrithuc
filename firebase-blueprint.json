@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student"] },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "A saved quiz containing multiple questions",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "topic": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "items": { "$ref": "#/entities/Question" }
+        },
+        "teacherId": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["title", "questions", "teacherId", "createdAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A single multiple choice question",
+      "type": "object",
+      "properties": {
+        "question": { "type": "string" },
+        "optionA": { "type": "string" },
+        "optionB": { "type": "string" },
+        "optionC": { "type": "string" },
+        "optionD": { "type": "string" },
+        "correctAnswer": { "type": "string" },
+        "topic": { "type": "string" }
+      },
+      "required": ["question", "optionA", "optionB", "optionC", "optionD", "correctAnswer"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "An active or past game session",
+      "type": "object",
+      "properties": {
+        "pin": { "type": "string" },
+        "quizId": { "type": "string" },
+        "quizTitle": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "active", "finished"] },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["pin", "quizId", "teacherId", "status", "createdAt"]
+    },
+    "Score": {
+      "title": "Score",
+      "description": "A player's score in a specific session",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "playerName": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "score": { "type": "number" },
+        "timestamp": { "type": "timestamp" }
+      },
+      "required": ["sessionId", "playerName", "score", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "Saved quizzes"
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Game sessions"
+    },
+    "/sessions/{sessionId}/scores/{scoreId}": {
+      "schema": { "$ref": "#/entities/Score" },
+      "description": "Player scores for a session"
+    }
+  }
+}
